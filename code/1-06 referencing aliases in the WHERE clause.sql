@@ -6,12 +6,12 @@ select sal as [salary], comm as [commission]
 
 */ 
 
-select *
+select ename, salary, commission
   from (
-select sal as salary, comm as commission
+select ename, sal as salary, comm as commission
   from emp
-       ) x
- where salary < 5000;
+       ) x  --- Don't forget it.
+ where salary >= 2000;
  
 -- note: you need to use an outer query to reference 
 -- aliases, window functions, aggregation function, etc.

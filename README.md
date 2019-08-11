@@ -2,7 +2,7 @@ In this repository, I store SQL programs I created on basis of Anthony Molinaro'
 
 To get started run `build_shcema.sql` to establish the database ([table](https://www.oreilly.com/library/view/sql-cookbook/0596009763/pr04.html#I__tt3)) the author refer to throughout the book.
 
-# Recipe
+# Recipe 1
 
 ## Recipe 1.3 
 Find all the employees in department 10 who earn a commission, and along with those in department 20 who earn at most \$2000 but at least \$1000. Order the result by department number.
@@ -35,36 +35,116 @@ Add a new column to flag null commission values.
 
 ## Recipe 1.13 
 List all the employees with a job title "clerk" or "analyst" and whose name starting with letter "A" or ending with letter "R." 
-
 > Only use single quotes with string. 
 
+
+
+# Recipe 2
 ## Recipe 2.3 
 Show employee names and jobs from table `emp` and sort by the last two characters in the `job` field.
+
+> Use SUBSTRING() to return a continuous subset from a string.
 
 ## Recipe 2.4.e 
 Sort results from `emp` by `comm` , some of which are null. Let non-null values show up first.
 
-> Null values are smaller than any real number.
+> A null value is smaller** than any real number.
 
 ## Recipe 2.4.g 
 Sort results from `emp` by `comm`, after null values in the filed `comm` have been transformed to integer zero.
 
+## Recipe 2.5
+Sort by a particular field after transforming null values to zero.
+
 ## Recipe 2.6 
 If `job` is 'salesman' sort on `comm`; otherwise, sort by `sal`.
-
 > You can use the CASE expression to dynamically change how results are sorted.
 
-## Recipe 3.1 
-Stack one row sets atop another with heterogeneous number and order of fields.
 
-## Recipe 3.3w 
+
+# Recipe 3
+
+## Recipe 3.1 
+Stack one row sets atop another with heterogeneous number and order of fields. In specific, show people from department = 10 on top of all the department names.
+> Use "NULL" as a place holder when you want a certain field to be blank in the result.
+
+## Recipe 3.3v 
 Return rows in one table with additional information appended from another tables.
+
+Give a view like the one below and append remaining columns with corresponding values.
+
+```sql
+create view v as
+select ename, job, sal
+  from emp
+ where job = 'CLERK';
+```
+> In SQL, a view is a virtual table based on the result-set of an SQL statement.
+
+The result looks like this:
+
+![](https://i.postimg.cc/Fzd4Lc11/screenshot-243.png)
+
+```sql
+--- 3-03v inner join with a view + where.sql
+select e.empno,
+       e.ename,
+	   e.job,
+	   e.sal,
+	   e.deptno
+  from emp as [e], v
+ where e.ename = v.ename
+   and e.job = v.job
+   and e.sal = v.sal
+```
 
 ## Recipe 3.3i 
 (continued) Use `inner join` (inner is optional) instead to perform the same task.
+```sql
+--- 3-03i inner join with normal join on.sql
+select e.empno,
+       e.ename,
+	   e.job,
+	   e.sal,
+	   e.deptno
+  from emp as [e] join v
+    on e.ename = v.ename
+   and e.job = v.job
+   and e.sal = v.sal
+```
 
-## Recipe 3.4 
-Retrieve values from one table that are missing from another table.
+## Recipe 3.4* 
+Retrieve values from one table that are missing from another table. For example,  show all the department numbers in Table `dept` but not in Table `emp`.
+
+```sql
+--- 3-04m find things in one table but not in another.sql
+select distinct deptno
+  from dept
+ where deptno not in 
+(
+select deptno
+  from emp
+)
+```
+Use DISTINCT() to avoid returning duplicate results (that is, more than one person come from the department missing from Table `deptno`)
+
+Another issue arises from the fact that the NOT IN expression actually consists of multiple OR operations. And in SQL, the condition "TRUE or NULL" results in **true**, but the condition =="FALSE or NULL" results in **null**==. It implies that once we have null in a multiple-OR condition, we would continue to have null result.
+
+To solve this issue (that is, a multiple-OR-conditions-like NOT IN expression possibly contains NULL comparison outcomes), use a correlated subquery in conjunction with ==NOT EXISTS.== 
+
+```sql
+--- 3-04b find things nto in another table.sql
+select distinct deptno 
+  from dept as [d]
+ where not exists
+(
+select null   
+  from emp as [e]
+ where d.deptno = e.deptno  
+)
+```
+
+
 
 ## Recipe 3.5 
 Reversely, retrieve (supplement) missing values in one table from another table
@@ -96,6 +176,10 @@ Return missing data from multiple tables to be shown on a single result table.
 
 ## Recipe 3.12 
 Compare WARD's salaries with the rest of people in the same department.
+
+
+
+# Recipe 7
 
 ## Recipe 7.1 
 Compute average salary by department.

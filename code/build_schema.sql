@@ -54,6 +54,8 @@ insert into emp_bonus values
 ('7900','14-MAR-2005','2'),
 ('7788','14-MAR-2005','3');
 
+---
+
 drop table if exists t1;
 create table t1 (
   id int
