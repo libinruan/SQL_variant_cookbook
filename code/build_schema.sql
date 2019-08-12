@@ -27,6 +27,22 @@ create table emp_bonus (
       type int default null 
 );
 
+drop table if exists emp_bonus3_9;
+
+create table emp_bonus3_9 (
+     empno int default null,
+  received date default null,
+      type int default null 
+);
+
+drop table if exists emp_bonus3_10;
+
+create table emp_bonus3_10 (
+     empno int default null,
+  received date default null,
+      type int default null 
+);
+
 insert into emp values 
 ('7369','SMITH','CLERK','7902','1980-12-17','800.00',NULL,'20'),
 ('7499','ALLEN','SALESMAN','7698','1981-02-20','1600.00','300.00','30'),
@@ -54,6 +70,15 @@ insert into emp_bonus values
 ('7900','14-MAR-2005','2'),
 ('7788','14-MAR-2005','3');
 
+insert into emp_bonus3_9 values
+('7934','17-MAR-2005','1'),
+('7934','15-FEB-2005','2'),
+('7839','15-FEB-2005','3'),
+('7782','15-FEB-2005','1');
+
+insert into emp_bonus3_10 values
+('7934','17-MAR-2005','1'),
+('7934','15-FEB-2005','2');
 ---
 
 drop table if exists t1;

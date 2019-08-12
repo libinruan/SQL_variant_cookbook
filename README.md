@@ -74,7 +74,7 @@ Return rows in one table with additional information appended from another table
 Give a view like the one below and append remaining columns with corresponding values.
 
 ```sql
-create view v as
+create view v1 as
 select ename, job, sal
   from emp
  where job = 'CLERK';
@@ -92,10 +92,10 @@ select e.empno,
 	   e.job,
 	   e.sal,
 	   e.deptno
-  from emp as [e], v
- where e.ename = v.ename
-   and e.job = v.job
-   and e.sal = v.sal
+  from emp as [e], v1
+ where e.ename = v1.ename
+   and e.job = v1.job
+   and e.sal = v1.sal;
 ```
 
 ## Recipe 3.3i 
@@ -110,11 +110,11 @@ select e.empno,
   from emp as [e] join v
     on e.ename = v.ename
    and e.job = v.job
-   and e.sal = v.sal
+   and e.sal = v.sal;
 ```
 
 ## Recipe 3.4* 
-Retrieve values from one table that are missing from another table. For example,  show all the department numbers in Table `dept` but not in Table `emp`.
+Show all the department numbers in Table `dept` but not in Table `emp`.
 
 ```sql
 --- 3-04m find things in one table but not in another.sql
@@ -124,7 +124,7 @@ select distinct deptno
 (
 select deptno
   from emp
-)
+);
 ```
 Use DISTINCT() to avoid returning duplicate results (that is, more than one person come from the department missing from Table `deptno`)
 
@@ -133,7 +133,7 @@ Another issue arises from the fact that the NOT IN expression actually consists 
 To solve this issue (that is, a multiple-OR-conditions-like NOT IN expression possibly contains NULL comparison outcomes), use a correlated subquery in conjunction with ==NOT EXISTS.== 
 
 ```sql
---- 3-04b find things nto in another table.sql
+--- 3-04b find things not in another table.sql
 select distinct deptno 
   from dept as [d]
  where not exists
@@ -141,41 +141,264 @@ select distinct deptno
 select null   
   from emp as [e]
  where d.deptno = e.deptno  
-)
+);
 ```
 
 
 
 ## Recipe 3.5 
-Reversely, retrieve (supplement) missing values in one table from another table
+List all the departments that have no employee.
+Note: we have the full list of departments in Table `dept`, and the full list of employees in Table `emp`.
 
-> Conclusion based on ## Recipes 3.4 and 3.5: we should place the table with **more** information to be in the **outer** query.
+> As in Recipes 3.4 and 3.5: we should place the table with **more** information to be in the **outer** query.
+
+```sql
+--- 3-05 list departments with no employees.sql
+select d.* , e.*
+  from dept as [d] left join emp as [e]
+    on d.deptno = e.deptno
+ where e.deptno is null; 
+--- note: we filter for nulls in Table emp. 
+```
+
+
 
 ## Recipe 3.6 
-Return all employees, the location of the department where they work, and the date of bonus if they received one. (order by location).
+Return all employees, the location of the department where they work, and the date of bonus if they received one. (order by location). The result should look like this one:
+
+![](https://i.postimg.cc/k58sNTW3/screenshot-302.png)
 
 > That is, Use outer join the third table without interfering the joining results of the preceding tables.
 
 ## Recipe 3.7 
-Count duplicates and missing data. Compare an artificial table V with duplicated data of employee "WARD" and people who do not work in department 10 with the `emp` table. Try to show the duplicated data and missing data from V.
+Count duplicates and missing data. Compare with Table`emp` an artificial table v2 that contains duplicated data of employee "WARD" and people who do not work in department 10 . Try to show the duplicated data and missing data from v2 in comparison to Table `emp`. 
+
+```sql
+create view v2 as
+select * from emp where deptno != 10
+ union all
+select * from emp where ename = 'WARD'; --- WARD is added one more time.
+```
+
+![](https://i.postimg.cc/yxwWTyFt/screenshot-303.png)
+
+The solution code could be broken into two major parts. ==In the first part, we identify the missing data from Table v2. In the second part, we filter for duplicated data that show in Table v2==.
+
+```sql
+--- Section 1
+select *
+  from 
+(
+select e.empno, e.ename, e.job, e.mgr, 
+       e.hiredate, e.sal, e.comm, e.deptno, 
+	   count(*) as cnt
+  from emp e
+ group by empno, ename, job, mgr, hiredate, sal, comm, deptno
+) e
+ where not exists
+(
+select null 
+  from 
+(
+select v.empno, v.ename, v.job, v.mgr, v.hiredate,
+       v.sal, v.comm, v.deptno, count(*) as cnt
+  from v2 as v
+ group by empno, ename, job, mgr, hiredate, sal, comm, deptno
+) v
+ where v.empno    = e.empno
+   and v.ename    = e.ename
+   and v.job      = e.job
+   and v.mgr      = e.mgr
+   and v.hiredate = e.hiredate
+   and v.sal      = e.sal
+   and v.deptno   = e.deptno
+   and v.cnt      = e.cnt
+   and coalesce(v.comm, 0) = coalesce(e.comm, 0)
+)
+```
+
+The outcome of the section 1 looks like this:
+
+![](https://i.postimg.cc/G2P1fJw6/screenshot-305.png)
+
+Similarly. We want to filter for duplicates that occur in Table v2.
+
+```sql
+--- section 2
+select *
+  from (
+select v.empno, v.ename, v.job, v.mgr, v.hiredate,
+       v.sal, v.comm, v.deptno, count(*) as cnt
+  from v2 as v
+ group by v.empno, v.ename, v.job, v.mgr, v.hiredate,
+       v.sal, v.comm, v.deptno
+       ) v
+ where not exists (
+select null
+  from (
+select e.empno, e.ename, e.job, e.mgr, e.hiredate,
+       e.sal, e.comm, e.deptno, count(*) as cnt
+  from emp as e
+ group by empno, ename, job, mgr, hiredate, sal, comm, deptno
+       ) e
+ where v.empno    = e.empno
+   and v.ename    = e.ename
+   and v.job      = e.job 
+   and v.mgr      = e.mgr
+   and v.hiredate = e.hiredate
+   and v.sal      = e.sal
+   and v.deptno   = e.deptno
+   and v.cnt      = e.cnt
+   and coalesce(v.comm, 0) = coalesce(e.comm, 0)
+       )
+```
+
+![](https://i.postimg.cc/1zHHYf7J/screenshot-306.png)
+
+> Union only combines distinct data as opposed to Union ALL.
+
+
 
 ## Recipe 3.8 
-Avoid cartesian product 
+Return the name of employees in department 10 along with the location of respective department. The result is as the following: 
 
-## Recipe 3.9d 
-Aggregate the salaries (from table `emp`) and the bonus (from table `emp_bonus`) for people in department 10 only. Issues come from that someone received multiple bonus, which duplicates the amount of the guy's salaries. 
+![](https://i.postimg.cc/5yvpgphF/screenshot-307.png)
+
+>  Avoid cartesian product 
+```sql
+--- 3-08 avoid cartesian product.sql
+select e.ename, d.loc
+  from emp e, dept d
+ where e.deptno = 10
+   and e.deptno = d.deptno
+```
+
+## Recipe 3.9d* 
+Aggregate the salaries (from table `emp`) and the bonus (from table `emp_bonus`) for people in department 10 only. Issues come from that someone received multiple bonus, thus appearing twice, which causes the guy's salaries double-counted. 
+
+> Introduction to windowed functions ([link](https://sqlsunday.com/2013/03/31/windowed-functions/))
+
+```sql
+--- 3.9d sum distinct.sql
+select deptno,
+       sum(distinct sal) as total_sal,
+	   sum(bonus) as total_bonus
+  from (
+select e.empno,
+       e.ename,
+	   e.sal,
+	   e.deptno,
+	   e.sal * case when eb.type = 1 then 0.1
+	                when eb.type = 2 then 0.2
+					else 0.3
+				end as bonus
+  from emp e, emp_bonus3_9 eb
+ where e.empno = eb.empno
+   and e.deptno = 10
+       ) x
+ group by deptno       
+```
+
+
 
 ## Recipe 3.9o 
-(*)(continued) Use OVER() to tackle this issue.
+```sql
+--- 3.9o pandas' transformation.sql 
+--- step 2.
+select d.deptno,
+       d.total_sal,
+       sum(e.sal * case when eb.type = 1 then 0.1
+                        when eb.type = 2 then 0.2
+                        else 0.3 end) as total_bonus
+--- step 1.                         
+  from (
+select deptno, sum(sal) as total_sal
+  from emp
+ where deptno = 10
+ group by deptno
+       ) d,
+       emp e,
+       emp_bonus3_9 eb
+ where e.deptno = d.deptno
+   and e.empno = eb.empno
+ group by d.deptno, d.total_sal
+```
+
+
 
 ## Recipe 3.10 
 Similar to Recipe 3.9 we are interested in the departmental aggregate with respect to salaries and bonus in department 10, but this time we change the bonus program such that only a subset of employees (actually a certain one was the single bonus receiver) in department 10 receive bonus (7839 and 7782 didn't receive a bonus in this case). 
 
+```sql
+--- 3-10 outer join.sql
+--- step 2. aggregate
+select deptno,
+       sum(distinct sal) as total_sal,
+       sum(bonus) as total_bonus
+  from (
+--- step 1. calculate bonus
+select e.empno,
+       e.ename,
+       e.sal,
+       e.deptno,
+       e.sal*case when eb.type is null then 0
+                  when eb.type = 1 then 0.1
+                  when eb.type = 2 then 0.2
+                  else 0.3 end as bonus
+  from emp e left outer join emp_bonus3_10 eb
+    on e.empno = eb.empno
+ where e.deptno = 10
+       ) x
+ group by deptno
+```
+
+> Don't forget to put the alias for the subquery.
+
 ## Recipe 3.11 
-Return missing data from multiple tables to be shown on a single result table.
+Return missing data from multiple tables to be shown on a single result table. 
+
+Suppose we modify Table `emp` with one extra data of employee whose department number is missing by copying existing data from employee "KING":
+
+```sql 
+insert into emp (empno, ename, job, mgr, hiredate, sal, comm, deptno)
+select 1111, 'YODA', 'JEDI', null, hiredate, sal, comm, null
+  from emp
+ where ename = 'KING';  
+```
+
+Two approaches to solve this request:
+
+```sql
+--- 3-11a full outer join.sql
+select d.deptno, d.dname, e.ename
+  from dept d full outer join emp e
+    on e.deptno = d.deptno
+```
+
+```sql
+--- 3-11b full outer join.sql
+select d.deptno, d.dname, e.ename
+  from dept d left outer join emp e
+    on e.deptno = d.deptno
+ union
+select d.deptno, d.dname, e.ename
+  from dept d right outer join emp e
+    on e.deptno = d.deptno
+```
+
+
 
 ## Recipe 3.12 
-Compare WARD's salaries with the rest of people in the same department.
+Compare WARD's commission with those of the rest of people respectively in the same department. The issue here is that some employees do not receive commission.
+
+```sql
+--- 3-12 convert null to zero.sql
+select ename, comm, coalesce(comm, 0)
+  from emp
+ where coalesce(comm, 0) < (select comm
+                              from emp
+                             where ename = `WARD`)
+```
 
 
 
