@@ -408,33 +408,86 @@ select ename, comm, coalesce(comm, 0)
 Compute average salary by department.
 
 ```sql
-select deptno, avg(sal)
+--- 7-01a groupwise average.sql
+select deptno, avg(sal) 
   from emp
  group by deptno
 ```
 
 ```sql
+--- 7-01o groupwise average.sql
 select distinct deptno, 
        avg(sal) over(partition by deptno)
   from emp
 ```
 
-## Recipe 7.6 
+## Recipe 7.2
+Min/Max value in a column.
+```sql
+--- 7-02a groupwise minmax.sql
+select deptno, min(sal) min_sal, max(sal) max_sal
+  from emp
+ group by deptno
+```
+```sql
+--- 7-02o groupwise minmax.sql
+select distinct deptno, 
+       min(sal) over (partition by deptno)
+  from emp
+```
+
+## Recipe 7.3
+```sql
+--- 7-03s groupwise sum.sql
+select deptno, 
+       sum(sal) as sum_sal
+  from emp
+ group by deptno
+```
+> The SUM function ignores nulls. To force groups with null values of aggreates to show in the result, we need to explicitly identify the presence of the group.
+> ```sql 
+> --- 7-03n sum with null.sql
+> select deptno, sum(comm)
+>   from emp
+>  where deptno in (10,30)
+>  group by deptno
+> ```
+
+## Recipe 7.4
+Count the number of employees in each department.
+```sql
+--- 7.4 count.sql
+select deptno, 
+       count(*) as cnt
+  from emp
+ group by deptnop
+```
+
+## Recipe 7.5
+Count the number of non-null comm.
+```sql
+--- 7.5 count non-null.sql
+select count(comm)
+  from emp
+```
+
+## Recipe 7.6* 
 Return the running total of salary in each department.
 
 ```sql
--- layout the outer query first
+--- 7-06 double loop.sql
+--- layout the outer query first
 select o.ename, 
        o.sal,
        (
--- follow by lay out the second query
--- aggregation funciton returns a scalar           
+--- follow by lay out the second query
+--- aggregation funciton returns a scalar           
 select sum(d.empno)
   from emp d
  where d.empno <= o.empno
--- end of the inner query           
+--- end of the inner query           
        )
--- end of the outer query       
+--- end of the outer query       
  where emp o       
 ```
 
@@ -442,27 +495,28 @@ select sum(d.empno)
 (continued) Generate a running product on, say, `empno`.
 
 ```sql
+--- 7.7 running product.sql
 select o.empno, 
--- After screen out of outer query,
--- elaborate the inner query
+--- After screen out of outer query,
+--- elaborate the inner query
        (
-select exp(sum(ln(d.empno))) as running_product      
+select exp(sum(log(d.empno))) as running_product 
   from emp d
  where d.empno <= o.empno   
    and d.deptno = o.deptno               
        )
--- write the outer query first
--- screen out people in dept 10 first
+--- write the outer query first
+--- screen out people in dept 10 first
   from emp o
  where o.deptno = 10  
- 
 -- note: don't forget the expression "d.deptno = o.deptno"
 ```
-
-## Recipe 7.8 
-Return the running difference of column `sal`. 
+> In SQL Server, use "log" to return the natural logarithm of a number.
+## Recipe 7.8* 
+Return the one-order difference of column `sal` in each department.
 
 ```sql
+--- 7.8 return one-order difference.sql
 with tbl as
 (
 	select row_number()
@@ -473,54 +527,55 @@ with tbl as
            sal
       from emp
 )
--- no comma needed to end the rigth parenthesis.
-
--- ISNULL() can handle the null value facing the first entry.
-select o.deptno, o.empno, o.sal, o.rn, d.rn, isnull(o.sal-d.sal, o.sal) difference
+--- No comma needed to end the rigth parenthesis.
+--- ISNULL() can handle the null value facing the first entry.
+select o.deptno, 
+       o.empno, 
+       o.sal, 
+       o.rn, 
+       d.rn, 
+       isnull(o.sal-d.sal, o.sal) difference
   from tbl o 
   left join tbl d
-    on o.rn = d.rn + 1 and o.deptno = d.deptno 
--- don't misse the department equality, because
--- you had used "partitiona by deptno" before.
+    on o.rn = d.rn + 1 and o.deptno = d.deptno;
+    
+--- Don't misse the department equality, because
+--- You had used "partitiona by deptno" before.
 ```
 
-## Recipe 7.9 
+## Recipe 7.9* 
 Return the mode of `sal` for each department.
 
-Comparison: Rank(), Dense_Rank() and Row_NUMBER()
+>  Comparison: Rank(), Dense_Rank() and Row_NUMBER()
+>
+> ![](https://i.postimg.cc/zXXvt1Fq/screenshot-446.png)
 
 ```sql
+--- 7-9 use dense_rank to find mode.sql
 select deptno,
        sal
-  from
-(
--- step 2. dense rank
+  from (
+--- step 2. dense rank
 select deptno, 
        sal,
        dense_rank() over(order by cnt desc) as rnk 
-  from 
-(    
--- step 1. count all
+  from (    
+--- step 1. count by sal in each department
 select deptno,
        sal,
        count(*) as cnt
   from emp
  group by deptno, sal   
--- If you only want to show the mode of a particular department
--- then remove all the "deptno," and add "where deptno = 10"
--- here, for example.    
-) x 
-) y
--- step 3. choose rank = 1
+--- If you only want to show the mode of a particular department
+--- then remove all the "deptno," and add "where deptno = 10"
+--- here, for example.    
+       ) x 
+       ) y
+--- step 3. choose rank = 1
 where rnk = 1
 
-/* result: 
-deptno	sal
-30	1250.00
-20	3000.00
-*/
--- note: there is no mode in department 10,
--- because no duplicates in salary are shown in department 10.
+--- note: there is no mode in department 10,
+--- because no duplicates in salary are shown in department 10.
 ```
 
 
