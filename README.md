@@ -658,7 +658,7 @@ select sal,
 
 Given the following table, return the balance based on transaction history.
 ```sql
---- 7-15 conditional summation in a running total.sql
+--- 7-15 conditional summation with running total.sql
 select case when b1.trs = 'py' then 'payable'
             else 'receivable' end as [transaction type],
        b1.amt,     
@@ -772,7 +772,7 @@ select case when ename = 'BLAKE' then hiredate end as blake_hd,
 Step 3. Counting the length of the interval with a pivotal table
 
 ```sql
---- 7-03a search two items in a column.sql
+--- 8-03a search two items in a column.sql
 --- step 2. counting the days inbetween
 select x.*, v500.*, datename(dw, dateadd(day, v500.id-1, jones_hd))
   from ( 
@@ -791,7 +791,7 @@ select max(case when ename = 'BLAKE' then hiredate end) as blake_hd,
 Step 4. Answering the question
 
 ```sql
---- 7-03b search two items in a column.sql
+--- 8-03b search two items in a column.sql
 --- step 2. flag the weekdays
 select sum(case when datename(dw, dateadd(day, v500.id-1, jones_hd)) in ('SATURDAY','SUNDAY') 
            then 0 else 1 end) as days 
