@@ -407,6 +407,8 @@ select ename, comm, coalesce(comm, 0)
 ## Recipe 7.1 
 Compute average salary by department.
 
+> Window functions operate on a set of rows and return a single value for each row from the underlying query. The term window describes the set of rows on which the function operates. A window function uses values from the rows in a window to calculate the returned values.
+
 ```sql
 --- 7-01a groupwise average.sql
 select deptno, avg(sal) 
@@ -548,7 +550,7 @@ Return the mode of `sal` for each department.
 
 >  Comparison: Rank(), Dense_Rank() and Row_NUMBER()
 >
-> ![](https://i.postimg.cc/zXXvt1Fq/screenshot-446.png)
+> ![](https://i.postimg.cc/CK0W7wbN/screenshot-447.png)
 
 ```sql
 --- 7-9 use dense_rank to find mode.sql
@@ -578,4 +580,320 @@ where rnk = 1
 --- because no duplicates in salary are shown in department 10.
 ```
 
+## Recipe 7.10
+
+Compute the median salary of department 20.
+
+```sql
+--- 7-10 median.sql
+ select avg(sal)
+  from (
+select sal,
+       count(*) over () as [total],
+	   cast(count(*) over () as float) / 2 as [mid],
+	   ceiling(cast(count(*) over () as float) / 2) as [next],
+	   row_number() over (order by sal) as rn
+  from emp
+ where deptno = 20
+       ) x
+ where (total%2 = 0 and rn in (mid, next))
+    or (total%2 != 0 and rn = next)
+```
+
+> Note: it is important to keep in mind that window functions are applied after the WHERE clause is evaluated.
+
+## Recipe 7.11
+
+Return the percentage of the sum of salaries in department 10 that contributes to the firm's total.
+
+```sql
+--- 7-11 percentage.sql
+ select distinct dsum/total*100 as pct 
+  from (
+select deptno,
+       sum(sal) over() total,
+       sum(sal) over (partition by deptno) dsum
+  from emp
+       ) x
+ where deptno = 10
+```
+
+> There are three employees in department 10. If you don't add the DISTINCT in the outer query. Two duplicated results will show.
+
+> Conditional on the type definition of variable SAL, you may need to explicitly include CAST to convert integer to floating point.
+
+## Recipe 7.12
+
+Return the average of commission that includes and counts null values in department 30.
+
+```sql
+--- 7-12
+select avg(coalesce(comm,0)) as avg_comm
+  from emp
+ where deptno = 30
+```
+
+
+
+## Recipe 7.13
+
+Return the average of salaries without considering the maximum and the minimum
+
+```sql
+--- 7-13 conditional average.sql
+select avg(sal)
+  from (
+--- step 1. find minimum and maximum
+select sal, 
+       min(sal) over () min_sal, 
+       max(sal) over () max_sal
+  from emp
+       ) x
+ where sal not in (min_sal, max_sal)
+```
+
+> For SQL Server, OVER() can only appear in the SELECT and ORDER BY clauses.
+
+## Recipe 7.15**
+
+Given the following table, return the balance based on transaction history.
+```sql
+--- 7-15 conditional summation in a running total.sql
+select case when b1.trs = 'py' then 'payable'
+            else 'receivable' end as [transaction type],
+       b1.amt,     
+       (
+--- step 1. 
+select sum(case when b2.trs = 'rc' then -b2.amt
+                else b2.amt end)
+  from bal1 b2
+ where b2.id <= b1.id
+       ) as balance
+  from bal1 b1;
+```
+
+# Recipe 8
+
+## Recipe 8.1
+
+Return the dates being added or subtracted 5 days, 5 months, and 5 years from the hiring date of employee 'CLARK' in department 10.
+```sql
+--- 8-01 add and subtract time.sql
+select dateadd(day,5,hiredate) as hd_add_5d,
+       dateadd(day,-5,hiredate) as hd_minus_5d,
+       dateadd(month,5,hiredate) as hd_add_5m,
+       dateadd(month,-5,hiredate) as hd_minus_5m,
+       dateadd(year,5,hiredate) as hd_add_5y,
+       dateadd(year,-5,hiredate) as hd_minus_5y
+  from emp
+ where deptno = 10
+```
+## Recipe 8.2
+Find the HIREDATEs of employee ALEN and employee WARD.
+
+> Think of DATEDIFF(unit, A, B)  as a function treating the first date, A, as the origin on the real line and returning the difference between A and B.
+
+```sql
+--- 8-02 date difference.sql
+select datediff(day, ward_hd, allen_hd)  
+  from (
+select hiredate as ward_hd
+  from emp
+ where ename = 'WARD'
+       ) x,
+       (
+select hiredate as allen_hd
+  from emp
+ where ename = 'ALLEN'
+       ) y
+```
+
+## Recipe 8.3*
+
+Determine the number of **weekday days** between hiring dates of 'BLAKE' and 'JONES.'
+
+> Using semicolon in front of the With clause ([link](https://stackoverflow.com/questions/6938060/common-table-expression-why-semicolon#answer-6938089))
+
+> ALTER TABLE() is used to add, delete, or modify columns ([link](https://www.w3schools.com/sql/sql_alter.asp))
+
+Step 1. We need a pivotal table with a single field `id` running from 1 to 500 ([source](https://stackoverflow.com/questions/1393951/what-is-the-best-way-to-create-and-populate-a-numbers-table#answer-1407488)). The pivotal table can help us count valid (non-holiday) days between two dates.
+
+```sql
+declare @RunDate datetime
+set @RunDate=GETDATE()
+
+--- Check the existence of table v500
+--- [dbo.] is optional.
+if object_id('dbo.v500','U') is not null
+	drop table dbo.v500
+
+--- The beginning of the major part
+create table v500 (id  datetime  not null)  
+;with Nums(id) as
+(select 1 as id
+ union all
+ select id+1 from Nums where id < 500
+)
+
+--- Use OPTION caluse to specify the indicated query hint.
+insert into v500(id)
+select id from Nums option(maxrecursion 10000)
+
+--- Add primary key to v500 using ADD CONSTRAINT
+alter table v500 
+add constraint PK_v500 primary key clustered (id)
+
+/*
+--- Check execution efficiency
+print convert(varchar(20), datediff(ms, @RunDate, GETDATE())) + ' milliseconds'
+*/
+---Check the length of result
+select count(*) as total_number from v500
+```
+> The GO command is used to group SQL commands into batches which are sent to the server together. ([link](https://stackoverflow.com/questions/2299249/what-is-the-use-of-go-in-sql-server-management-studio-transact-sql#answer-2299255))
+
+> CROSS JOIN() gets a row from one table and then creates a new row for each row in the other table. ([link](https://i.postimg.cc/ZnPzSVYy/screenshot-628.png))
+
+> Using OBJECT_ID(par1, par2) to check whether an object exists or not. Check here for the list of the 2nd parameter. ([link](https://stackoverflow.com/questions/17546814/why-object-id-used-while-checking-if-a-table-exists-or-not#answer-20479221))
+>
+> > Example: if(object_id(N'[dbo].[YourTable]', 'U') is not null) ...
+
+Step 2. First, you need to know which hiring date is earlier.
+
+```sql
+select case when ename = 'BLAKE' then hiredate end as blake_hd,
+       case when ename = 'JONES' then hiredate end as jones_hd
+  from emp
+ where ename in ('BLAKE','JONES')
+```
+
+![](https://i.postimg.cc/TYTLLPLn/screenshot-629.png)
+
+Step 3. Counting the length of the interval with a pivotal table
+
+```sql
+--- 7-03a search two items in a column.sql
+--- step 2. counting the days inbetween
+select x.*, v500.*, datename(dw, dateadd(day, v500.id-1, jones_hd))
+  from ( 
+--- step 1. Just in case BLAKE and JONES have multiple entries in the table
+select max(case when ename = 'BLAKE' then hiredate end) as blake_hd,
+       max(case when ename = 'JONES' then hiredate end) as jones_hd
+  from emp
+ where ename in ('BLAKE', 'JONES')
+       ) x,
+       v500
+ where v500.id <= datediff(day,jones_hd, blake_hd) + 1       
+```
+
+![](https://i.postimg.cc/hPQwmKkP/screenshot-630.png)
+
+Step 4. Answering the question
+
+```sql
+--- 7-03b search two items in a column.sql
+--- step 2. flag the weekdays
+select sum(case when datename(dw, dateadd(day, v500.id-1, jones_hd)) in ('SATURDAY','SUNDAY') 
+           then 0 else 1 end) as days 
+/* 
+select x.*, v500.*, datename(dw, dateadd(day, v500.id-1, jones_hd))
+*/
+  from ( 
+--- step 1. Just in case BLAKE and JONES have multiple entries in the table
+select max(case when ename = 'BLAKE' then hiredate end) as blake_hd,
+       max(case when ename = 'JONES' then hiredate end) as jones_hd
+  from emp
+ where ename in ('BLAKE', 'JONES')
+       ) x,
+       v500
+ where v500.id <= datediff(day,jones_hd, blake_hd) + 1       
+
+```
+> If you want to exclude holidays as well, create a table HOLIDAYS and then exclude days listed in the HOLIDAYS table with the NOT IN clause.
+
+> DATENAME() returns a character string representing the specified datepart (see argument table [here](https://docs.microsoft.com/en-us/sql/t-sql/functions/datename-transact-sql?view=sql-server-2017)) of the specified date.
+
+## Recipe 8.4
+Returns the number of months or years between the latest and oldest hiring dates.
+
+![](https://i.postimg.cc/bNBjk6Vp/screenshot-631.png)
+
+```sql
+--- 8-04 datediff.sql
+select datediff(year, min_hd, max_hd) years,
+       datediff(month, min_hd, max_hd) months,
+       cast(datediff(month, min_hd, max_hd) as decimal) / 12 fyears
+  from (
+select max(hiredate) as max_hd, 
+       min(hiredate) as min_hd       
+  from emp
+       ) x
+```
+> See [here](https://www.w3schools.com/sql/func_sqlserver_datediff.asp) for DATEDIFF() 's argument table.
+
+![](https://i.postimg.cc/2ytXbtkt/screenshot-632.png)
+
+## Recipe 8.5
+
+## Recipe 8.6
+
+## Recipe 8.7
+
+
+# Recipe 9
+
+## Recipe 9.1 
+
+## Recipe 9.2 
+
+## Recipe 9.3 
+
+## Recipe 9.4 
+
+## Recipe 9.5 
+
+## Recipe 9.6 
+
+## Recipe 9.7 
+
+## Recipe 9.8 
+
+## Recipe 9.9 
+
+## Recipe 9.10
+
+## Recipe 9.11
+
+## Recipe 9.12
+
+## Recipe 9.13
+
+
+
+# Recipe 10
+
+## Recipe 10.1
+
+## Recipe 10.2
+
+## Recipe 10.3
+
+## Recipe 10.4
+
+## Recipe 10.5
+
+Generate consecutive numeric values.
+
+```sql
+--- create a subquery block
+with v500 (id) as (
+select 1
+  from t1
+ union all
+select id + 1
+  from v500
+ where id+1 <= 500 
+) --- as
+select * from v500
+```
 

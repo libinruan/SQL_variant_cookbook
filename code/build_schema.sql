@@ -43,6 +43,14 @@ create table emp_bonus3_10 (
       type int default null 
 );
 
+drop table if exists bal1;
+
+create table bal1 (
+   id int default null,
+  amt decimal(7,2) default null,
+  trs varchar(10) default null
+);
+
 insert into emp values 
 ('7369','SMITH','CLERK','7902','1980-12-17','800.00',NULL,'20'),
 ('7499','ALLEN','SALESMAN','7698','1981-02-20','1600.00','300.00','30'),
@@ -79,6 +87,15 @@ insert into emp_bonus3_9 values
 insert into emp_bonus3_10 values
 ('7934','17-MAR-2005','1'),
 ('7934','15-FEB-2005','2');
+
+insert into bal1 values
+('1', '100', 'rc'),
+('2', '100', 'rc'),
+('3',  '50', 'py'),
+('4', '100', 'rc'),
+('5', '200', 'py'),
+('6',  '50', 'py');
+
 ---
 
 drop table if exists t1;
