@@ -835,9 +835,110 @@ select max(hiredate) as max_hd,
 
 ## Recipe 8.5
 
+Returns the number of seconds and minutes or hours between hiring dates of WARD and ALLEN.
+
+```sql
+--- 8-05 similar to 8-04.sql
+--- step 2.
+select datediff(day, allen_hd, ward_hd)*24 hr,
+       datediff(day, allen_hd, ward_hd)*24*60 min,
+	   datediff(day, allen_hd, ward_hd)*24*60*60 sec,
+	   ward_hd,
+	   allen_hd
+  from (
+--- step 1.
+select max(case when ename = 'WARD' then hiredate end) as ward_hd,
+       max(case when ename = 'ALLEN' then hiredate end) as allen_hd
+  from emp
+       ) x
+```
+
+
+
 ## Recipe 8.6
 
-## Recipe 8.7
+Counting weekdays of this year.
+
+```sql
+--- step 2. create a full list of dates in this year.
+--- setp 1. identify the start of the list (the fist date)
+select cast(
+       cast(year(getdate()) as varchar) 
+            + '01-01' as datetime) as [start_date]
+  from t1
+```
+
+```sql
+--- step 2. [start] generate the end date
+;with cte (start_date, end_date)
+as (
+select start_date, 
+       dateadd(year, 1, start_date) as [end_date]
+  from (
+--- step 1. [star] generate the start date
+select cast(
+       cast(year(getdate()) as varchar) + '-01-01' as datetime
+	   ) as [start_date]
+  from t1
+--- step 1. [end]
+       ) tmp
+ union all
+--- step 2. [start] finish the second part of the common table expression
+select dateadd(day, 1, start_date), end_date
+  from cte
+ where dateadd(day, 1, start_date) < end_date
+--- step 2. [end]
+) 
+--- step 3. [start] aggregate with group by for each weekday
+select datename(dw, start_date) weekday, count(*) sum
+  from cte
+ group by datename(dw, start_date)
+option (maxrecursion 366)
+```
+
+![](https://i.postimg.cc/7hWCDnwj/screenshot-773.png)
+
+## Recipe 8.7*
+
+Returns the date difference between everyone's hiring date and a latest hiring date in department 10. 
+
+```sql
+--- 8-07 compare everyone with a target.sql
+select x.*, 
+       datediff(day, x.hiredate, x.next_hd) as [diff]
+  from (
+--- find the next hire date for each employment
+--- outer loop [start]
+select o.deptno, o.ename, o.hiredate,
+       (
+--- inner loop [start]
+select min(i.hiredate) from emp i
+ where i.hiredate > o.hiredate
+       ) as [next_hd]
+--- inner loop [end]
+  from emp o
+ where o.deptno = 10
+--- outer loop [end]
+       ) x
+```
+
+```sql
+--- compare with a simple benchmark '1982-12-10'
+select x.*, --- step 3. last one
+       datediff(day, hiredate, next_hd) as pass
+  from (
+select deptno, ename, hiredate, --- step 2.
+       (
+select cast('1982-12-10' as datetime) from t1 --- step 1. generate benchmark
+       ) as next_hd
+  from emp
+ where deptno = 10
+       ) x
+```
+
+
+
+
 
 
 # Recipe 9
