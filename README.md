@@ -1,4 +1,4 @@
-In this repository, I store SQL programs I created on basis of Anthony Molinaro's Amazon best selling book "SQL cookbook." I made quite a few revision and add some variant examples derived from the origin SQL challenges in the book so as to make the collection of SQL recipes here better suitable for a SQL job interview.
+In this repository, I show the SQL programs I created based on Anthony Molinaro's Amazon best selling book "SQL cookbook." 
 
 To get started run `build_shcema.sql` to establish the database ([table](https://www.oreilly.com/library/view/sql-cookbook/0596009763/pr04.html#I__tt3)) the author refer to throughout the book.
 
